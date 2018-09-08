@@ -10,8 +10,6 @@ namespace ToolsBasicMiguel
 
         private LevelEditor levelEditor;
         private const float ROWHEIGHT = 75;
-        private float timer = 0.0f;
-        private const float DELAY = 1.5f;
 
         // Keeping the LevelEditor GameObject for as long is on "Building" mode
         private void CallbackFunction()
@@ -44,11 +42,14 @@ namespace ToolsBasicMiguel
 
             var groundBrush = serializedObject.FindProperty("GroundBrush");
             var propBrush = serializedObject.FindProperty("Props");
+            var snapOption = serializedObject.FindProperty("Snapping");
 
             DrawProperty(groundBrush, "Ground Brushes", levelEditor.GroundBrush != null ? levelEditor.GroundBrush.Count : 0, DropGroundBrushAction, DrawGroundBrush);
             DrawProperty(propBrush, "Props Bruhes", levelEditor.Props != null ? levelEditor.Props.Count : 0, DropPropsBrushAction, DrawPropsBrush);
+            EditorGUILayout.PropertyField(snapOption);
 
             serializedObject.ApplyModifiedProperties();
+            EditorUtility.SetDirty(target);
         }
 
         private void DropGroundBrushAction(UnityEngine.Object obj)
@@ -61,7 +62,15 @@ namespace ToolsBasicMiguel
         {
             Texture2D preview
                 = AssetPreview.GetAssetPreview(levelEditor.GroundBrush[elementIndex]);
-            GUI.Label(location, preview);
+
+            GUIStyle style = new GUIStyle();
+            if (elementIndex == levelEditor.selectedGround)
+            {
+                style = new GUIStyle(GUI.skin.box); 
+            }
+
+
+            GUI.Label(location, preview, style);
         }
 
         private void DropPropsBrushAction(UnityEngine.Object obj)
@@ -148,20 +157,85 @@ namespace ToolsBasicMiguel
                     break;
             }
         }
-        
+
+
+        private bool isScaling = false;
+        private bool isRotating = false;
         private void OnSceneGUI()
         {
             if (levelEditor == null)
                 levelEditor = (LevelEditor)target;
 
             Event e = Event.current;
-            if (e.type == EventType.KeyDown && e.shift && e.keyCode == KeyCode.S)
+            if (e.type == EventType.KeyDown)
             {
-                // Toggle Level Editor on SHIFT + S
-                levelEditor.on = !levelEditor.on;
+                if (e.shift && e.keyCode == KeyCode.S)
+                {
+                    // Toggle Level Editor on SHIFT + S
+                    levelEditor.on = !levelEditor.on;
+                    if(!levelEditor.on)
+                    {
+                        isScaling = false;
+                        isRotating = false;
+                    }
+
+                }else if(e.shift && e.keyCode == KeyCode.Q)
+                {
+                    levelEditor.ChangeBrush(LEChangeBrushDirection.LEFT);
+                }
+                else if(e.shift && e.keyCode == KeyCode.E)
+                {
+                    levelEditor.ChangeBrush(LEChangeBrushDirection.RIGHT);
+                }
+                else if(e.shift && e.keyCode == KeyCode.R && levelEditor.on) 
+                {
+                    isScaling = !isScaling;
+                    if (!isScaling)
+                        isRotating = false;
+                }
+                else if(e.shift && e.keyCode == KeyCode.T && levelEditor.on)
+                {
+                    isRotating = !isRotating;
+                    if (!isRotating)
+                        isScaling = false;
+                }
+            }
+            
+            if(e.type == EventType.KeyUp && e.control && e.keyCode == KeyCode.Z && levelEditor.on)
+            {
+                levelEditor.ResetBrushTransform();
             }
 
-            GUILayout.BeginArea(new Rect(20, 20, 180, 750));
+            if (isScaling)
+            {
+                EditorGUI.BeginChangeCheck();
+                
+                float handleSize = HandleUtility.GetHandleSize(levelEditor.BrushTransform().position );
+                Vector3 newScale = Handles.ScaleHandle(
+                    levelEditor.BrushTransform().localScale, 
+                    levelEditor.BrushTransform().position,
+                    levelEditor.BrushTransform().rotation, handleSize );
+
+                if (EditorGUI.EndChangeCheck())
+                {
+                    levelEditor.ScaleCurrentBrush(newScale);
+                }
+            }
+
+            if(isRotating)
+            {
+                EditorGUI.BeginChangeCheck();
+                Quaternion newRotation = Handles.RotationHandle(
+                    levelEditor.BrushTransform().rotation, 
+                    levelEditor.BrushTransform().localPosition);
+
+                if (EditorGUI.EndChangeCheck())
+                {
+                    levelEditor.RotateCurrentBrush(newRotation);
+                }
+            }
+            
+            GUILayout.BeginArea(new Rect(20, 20, 190, 270));
             {
                 var rect = EditorGUILayout.BeginVertical();
                 {
@@ -214,10 +288,24 @@ namespace ToolsBasicMiguel
                             GUILayout.EndHorizontal();
                             GUILayout.BeginHorizontal();
                             {
+                                if(GUILayout.Button("<"))
+                                {
+                                    levelEditor.ChangeBrush(LEChangeBrushDirection.LEFT);
+                                }
+
                                 GUILayout.FlexibleSpace();
                                 GUILayout.Label(preview);
                                 GUILayout.FlexibleSpace();
+                                
+                                if(GUILayout.Button(">"))
+                                {
+                                    levelEditor.ChangeBrush(LEChangeBrushDirection.RIGHT);
+                                }
                             }
+                            GUILayout.EndHorizontal();
+
+                            GUILayout.BeginHorizontal();                           
+                                GUILayout.Label("To change Brush press \nSHIFT-Q or SHIFT-E");
                             GUILayout.EndHorizontal();
                         }
                     }
@@ -227,9 +315,8 @@ namespace ToolsBasicMiguel
             }
             GUILayout.EndArea();
 
-            if (levelEditor.on)
+            if (levelEditor.on && !isScaling && !isRotating)
             {
-                timer += Time.deltaTime;
                 // Way of controlling the drag-click-move
                 //
                 //int controlId = GUIUtility.GetControlID(FocusType.Passive);
@@ -237,6 +324,7 @@ namespace ToolsBasicMiguel
                 //HandleUtility.AddDefaultControl(GUIUtility.GetControlID(GetHashCode(), FocusType.Passive));
                 //Event.current.Use();
                 int controlId = GUIUtility.GetControlID(FocusType.Passive);
+
                 switch (Event.current.type)
                 {
                     case EventType.MouseDown:
@@ -269,12 +357,8 @@ namespace ToolsBasicMiguel
             if (!Application.isPlaying 
                 && current.button == 0)
             {
-                if (timer > DELAY)
-                {
-                    OnMouseMove(Event.current);
-                    OnMouseDown(current);
-                    timer = 0.0f;
-                }
+                OnMouseMove(current);
+                OnMouseDown(current);
             }
         }
 
@@ -293,13 +377,23 @@ namespace ToolsBasicMiguel
                 SceneView view = SceneView.currentDrawingSceneView;
                 if (view != null)
                 {
-                    Ray ray = HandleUtility.GUIPointToWorldRay(current.mousePosition);
+                    Ray ray = HandleUtility.GUIPointToWorldRay(current.mousePosition);                    
+                    RaycastHit[] hits = Physics.RaycastAll(ray);
 
-                    RaycastHit hit;
+                    int i = 0;
+                    while(i < hits.Length)
+                    {
+                        if(hits[i].collider.gameObject.GetComponent<LevelEditor>() != null)
+                        {
+                            levelEditor.SetCursor(hits[i].point);
+                            break;
+                        }
+                    }
+                    /*
                     if (Physics.Raycast(ray, out hit, 500))
                     {
                         levelEditor.SetCursor(hit.point);
-                    }
+                    }*/
                 }
             }
         }
