@@ -44,8 +44,8 @@ namespace ToolsBasicMiguel
             var propBrush = serializedObject.FindProperty("Props");
             var snapOption = serializedObject.FindProperty("Snapping");
 
-            DrawProperty(groundBrush, "Ground Brushes", levelEditor.GroundBrush != null ? levelEditor.GroundBrush.Count : 0, DropGroundBrushAction, DrawGroundBrush);
-            DrawProperty(propBrush, "Props Bruhes", levelEditor.Props != null ? levelEditor.Props.Count : 0, DropPropsBrushAction, DrawPropsBrush);
+            DrawProperty(groundBrush, "Ground Set", levelEditor.GroundBrush != null ? levelEditor.GroundBrush.Count : 0, DropGroundBrushAction, DrawGroundBrush);
+            DrawProperty(propBrush, "Props Set", levelEditor.Props != null ? levelEditor.Props.Count : 0, DropPropsBrushAction, DrawPropsBrush);
             EditorGUILayout.PropertyField(snapOption);
 
             serializedObject.ApplyModifiedProperties();
@@ -83,6 +83,7 @@ namespace ToolsBasicMiguel
         {
             Texture2D preview
                 = AssetPreview.GetAssetPreview(levelEditor.Props[elementIndex]);
+
             GUI.Label(location, preview);
         }
         
@@ -268,13 +269,33 @@ namespace ToolsBasicMiguel
                         {
                             GUILayout.Label("Current Status: INNACTIVE \n(SHIFT + S to activate)");
                         }
+
                     }
                     GUILayout.EndHorizontal();
 
 
                     GUILayout.BeginVertical();
                     {
-                        if(levelEditor.GroundBrush.Count > 0)
+                        GUIStyle selectedSet = new GUIStyle(EditorStyles.boldLabel);
+                        if (levelEditor.eSelectedBrush == LESelectedBrush.GROUND)
+                        {
+
+                            GUILayout.BeginHorizontal();
+                            GUILayout.Label("Current Set: ");
+                            GUILayout.Label("GROUND", selectedSet);
+                            GUILayout.EndHorizontal();
+                        }
+                        else
+                        {
+                            GUILayout.BeginHorizontal();
+                            GUILayout.Label("Current Set: ");
+                            GUILayout.Label("PROPS", selectedSet);
+                            GUILayout.EndHorizontal();
+                        }
+
+                        GUILayout.Label("(Shift + W to change set)");
+
+                        if (levelEditor.GroundBrush.Count > 0)
                         { 
                             GameObject obj = levelEditor.GroundBrush[levelEditor.selectedGround];
                             Texture2D preview = AssetPreview.GetAssetPreview(obj);
@@ -282,6 +303,7 @@ namespace ToolsBasicMiguel
                             GUILayout.BeginHorizontal();
                             {
                                 GUILayout.FlexibleSpace();
+                                
                                 GUILayout.Label("Selected Brush: ", new GUIStyle(EditorStyles.boldLabel));
                                 GUILayout.FlexibleSpace();
                             }
